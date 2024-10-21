@@ -1,0 +1,12 @@
+numpy
+pandas
+scikit-learn
+black
+flake8
+isort
+loguru
+pip
+python-dotenv
+tqdm
+typer
+-e .
