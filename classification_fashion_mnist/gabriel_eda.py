@@ -2,12 +2,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from skimage import measure
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GroupKFold
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import roc_auc_score
 from sklearn.decomposition import PCA
 from sklearn.tree import DecisionTreeClassifier
-
 
 def load_data(path):
     """
@@ -165,14 +166,18 @@ def decision_tree_classifier(data_path):
     Decision Tree Classifier for classification of images
     Standard stuff, nothing special, also prints some metrics
     """
+    # need k fold cross validation
     df = pd.read_csv(data_path)
     X, y = df.iloc[:, 1:], df.iloc[:, 0]
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     dt = DecisionTreeClassifier()
     dt.fit(X_train, y_train)
     y_pred = dt.predict(X_test)
+    y_pred_proba = dt.predict_proba(X_test)
+    print('\nDecision Tree Classifier:')
     print('Confusion Matrix:\n', confusion_matrix(y_test, y_pred))
     print('Classification Report:\n',classification_report(y_test, y_pred))
+    print('AUC Score:', round(roc_auc_score(y_test, y_pred_proba, multi_class='ovr'), 2))
 
 
 def random_forest_classifier(data_path):
@@ -180,14 +185,42 @@ def random_forest_classifier(data_path):
     Random Forest Classifier for classification of images
     Standard stuff, nothing special, also prints some metrics
     """
+    # need k fold cross validation
+    number_of_folds = 5
+    group_k_fold = GroupKFold(n_splits=number_of_folds)
     df = pd.read_csv(data_path)
     X, y = df.iloc[:, 1:], df.iloc[:, 0]
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     rf = RandomForestClassifier(n_estimators=100, random_state=42)
     rf.fit(X_train, y_train)
     y_pred = rf.predict(X_test)
+    y_pred_proba = rf.predict_proba(X_test)
+    print('\nRandom Forest Classifier:')
     print('Confusion Matrix:\n', confusion_matrix(y_test, y_pred))
     print('Classification Report:\n',classification_report(y_test, y_pred))
+    print('AUC Score:', round(roc_auc_score(y_test, y_pred_proba, multi_class='ovr'), 2))
+
+
+def random_forest_classifier_kfold(data_path):
+    # To be implemented
+    df = pd.read_csv(data_path)
+    rf = RandomForestClassifier(n_estimators=100, random_state=42)
+    group_k_fold = GroupKFold(n_splits=5)
+    X, y = df.iloc[:, 1:], df.iloc[:, 0]
+
+
+def evaluate_classifiers(data_path):
+    """
+    Evaluate the performance of the classifiers
+    Current classifiers: Random Forest and Decision Tree
+    """
+    # Need to do k fold and cross validation
+    df = pd.read_csv(data_path)
+    features, labels = df.iloc[:, 1:], df.iloc[:, 0]
+    classifiers = [RandomForestClassifier(), DecisionTreeClassifier()]
+    runs = 5
+    number_of_folds = 5
+    number_of_classifiers = len(classifiers)
 
 
 def visualize_data(padded_images, binary_images):
@@ -214,12 +247,7 @@ def visualize_data(padded_images, binary_images):
     plt.show()
 
 
-def main():
-    """
-    Question: Should we implement Convolutional Neural Network for template matching?
-    Labels: t-shirt=0, pants=1, long-sleeve=2, dress=3, other-shirt=4
-    """
-
+def data_manipulator():
     original_images, reshaped_images, padded_images, padded_images_left, padded_images_right, padded_images_top, \
             padded_images_bottom, binary_images, binary_images_left, binary_images_right, binary_images_top, \
             binary_images_bottom, labels = load_data('fashion_train.npy')
@@ -280,26 +308,37 @@ def main():
                     'max_heights_top', 'mean_heights_top', 'variance_heights_top',
                     'max_heights_bottom', 'mean_heights_bottom', 'variance_heights_bottom']
 
-    pca_data = pca_on_images(original_images, labels, 71)
-
+    pca_data = pca_on_images(original_images, labels, 150)
     df_circumference = pd.DataFrame(circumference_data, columns=circumference_column_names)
-    df_circumference.to_csv('../data/processed/circumference_features.csv', index=False)
-
+    df_circumference.to_csv('circumference_features.csv', index=False)
     df_width = pd.DataFrame(width_data, columns=width_column_names)
-    df_width.to_csv('../data/processed/width_features.csv', index=False)
-
+    df_width.to_csv('width_features.csv', index=False)
     df_height = pd.DataFrame(height_data, columns=height_column_names)
-    df_height.to_csv('../data/processed/height_features.csv', index=False)
-
+    df_height.to_csv('height_features.csv', index=False)
     df_pca = pd.DataFrame(pca_data)
-    df_pca.to_csv('../data/processed/pca_features.csv', index=False)
+    df_pca.to_csv('pca_features.csv', index=False)
+    df_template = pd.read_csv('template_matching.csv')
+    df_template.iloc[:, 0] = df_circumference.iloc[:, 0]
+    df_pca.to_csv('template_features.csv', index=False)
 
-    df_combined = pd.concat([df_circumference, df_width.iloc[:, 1:], df_height.iloc[:, 1:], df_pca.iloc[:, 1:]], axis=1)
-    df_combined.to_csv('../data/processed/combined_features.csv', index=False)
+    df_combined = pd.concat([df_circumference, df_width.iloc[:, 1:], df_height.iloc[:, 1:], df_pca.iloc[:, 1:], df_template.iloc[:, 1:]], axis=1)
+    df_combined.to_csv('combined_features.csv', index=False)
 
-    decision_tree_classifier('../data/processed/combined_features.csv')
-    random_forest_classifier('../data/processed/combined_features.csv')
-    # visualize_data(padded_images, binary_images)
+    visualize_data(padded_images, binary_images)
+
+
+def main():
+    """
+    Question: Should we implement Convolutional Neural Network for template matching?
+    Labels: t-shirt=0, pants=1, long-sleeve=2, dress=3, other-shirt=4
+    """
+    data_manipulator()
+    # decision_tree_classifier('circumference_features.csv')
+    # random_forest_classifier('template_features.csv')
+    # random_forest_classifier_kfold('circumference_features.csv')
+    # evaluate_classifiers('combined_features.csv')
+
+    # Use tensorflow for ffnn instead of pytorch as torch sucks (according to keli)
 
 
 if __name__ == '__main__':
