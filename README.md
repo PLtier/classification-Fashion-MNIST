@@ -147,3 +147,7 @@ At least `fix` and `feat` !
 ```bash
 git checkout -b initial-exploration
 ```
+
+### Few practices:
+From "Accelerate", Forsgren:
+"In short and maybe- counter-intuitively - going faster and releasing more frequently actually LEDs to higher quality products."
