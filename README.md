@@ -139,13 +139,36 @@ For phases of the project, we generally use a scheme like the following, but you
 
 Now that you have your notebook going, start your analysis!
 
-### Work on feature branches and use conventional commits
+### Branching and commiting
 
+We follow trunk-based branching i.e. for releases we use tags (but in our case - there will be one final release only), we don't work on main but use feature branches.
+
+![Source](./references/trunk1c.png)
+
+We follow
 [Conventional commits](https://www.conventionalcommits.org/en/v1.0.0/).
-At least `fix` and `feat` !
+
+We prefix the commit message with a type, and then a description.
 
 ```bash
-git checkout -b initial-exploration
+feat:     # work related to a feature
+docs:     # changes to documentation
+fix:      # bug fix
+style:    # formatting
+refactor: # refactoring and reducing technical debt
+test:     # changes related to tests
+chore:    # changes that are minor, like updating dependencies
+ci:       # changes to pipelines, build systems, etc.
+```
+
+A prefix can also be scoped ( feat(scope): description ), and the description can be multiline.
+
+And breaking changes can be highlighted with a ! after the type/scope, e.g. feat!: description.
+Though in our project I don't predict these.
+
+```bash
+git checkout -b initial-exploration #OK
+git push -u origin main #NOT! It's blocked besides
 ```
 
 ### Few practices:
