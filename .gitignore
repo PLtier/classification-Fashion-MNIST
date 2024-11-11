@@ -1,5 +1,11 @@
 # Data
 
+# TeX
+reports/*.aux
+reports/*.fls
+reports/*.synctex.gz
+reports/*.fdb_latexmk
+
 # Mac OS-specific storage files
 .DS_Store
 
