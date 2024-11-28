@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from numpy.ma import mean
 import pandas as pd
 from skimage import measure
 from sklearn.model_selection import train_test_split, GroupKFold
@@ -18,6 +19,7 @@ def load_data(path):
     and labels.
     """
     original_images = np.load(path)
+    original_image = (original_images[:, :-1] - np.mean(original_images[:, :-1], axis=1)[:, np.newaxis]) / np.std(original_images[:, :-1], axis=1)[:, np.newaxis]
     reshaped_images = original_images[:, :28 * 28].reshape(-1, 28, 28)
     padded_images = np.pad(reshaped_images, pad_width=((0, 0), (1, 1), (1, 1)), mode='constant', constant_values=0)
     padded_images_left = padded_images[:, :, :15]
@@ -169,8 +171,8 @@ def decision_tree_classifier(data_path):
     # need k fold cross validation
     df = pd.read_csv(data_path)
     X, y = df.iloc[:, 1:], df.iloc[:, 0]
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    dt = DecisionTreeClassifier()
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.7, random_state=42)
+    dt = DecisionTreeClassifier(max_depth=50)
     dt.fit(X_train, y_train)
     y_pred = dt.predict(X_test)
     y_pred_proba = dt.predict_proba(X_test)
@@ -198,7 +200,8 @@ def random_forest_classifier(data_path):
     print('\nRandom Forest Classifier:')
     print('Confusion Matrix:\n', confusion_matrix(y_test, y_pred))
     print('Classification Report:\n',classification_report(y_test, y_pred))
-    print('AUC Score:', round(roc_auc_score(y_test, y_pred_proba, multi_class='ovr'), 2))
+    print('AUC Score:', round(roc_auc_score(y_test, y_pred_proba, multi_class='ovr'), 4))
+
 
 
 def random_forest_classifier_kfold(data_path):
@@ -324,7 +327,85 @@ def data_manipulator():
     df_combined = pd.concat([df_circumference, df_width.iloc[:, 1:], df_height.iloc[:, 1:], df_pca.iloc[:, 1:], df_template.iloc[:, 1:]], axis=1)
     df_combined.to_csv('combined_features.csv', index=False)
 
-    visualize_data(padded_images, binary_images)
+    # visualize_data(padded_images, binary_images)
+
+
+class DecisionTree:
+    def __init__(self, max_depth=1000, min_samples_split=7):
+        self.max_depth = max_depth
+        self.min_samples_split = min_samples_split
+        self.tree = None
+
+    def fit(self, X, y):
+        self.tree = self._build_tree(X, y)
+
+    def predict(self, X):
+        return np.array([self._predict_single_input(x, self.tree) for x in X])
+
+    def _build_tree(self, X, y, depth=0):
+        num_samples, num_features = X.shape
+        num_classes = len(set(y))
+        if (depth >= self.max_depth or num_samples < self.min_samples_split or num_classes == 1):
+            return self._create_leaf(y)
+        best_gini, best_idx, best_thresh = np.inf, None, None
+        for idx in range(num_features):
+            thresholds = np.unique(X[:, idx])
+            for thresh in thresholds:
+                gini = self._gini_index(X[:, idx], y, thresh)
+                if gini < best_gini:
+                    best_gini, best_idx, best_thresh = gini, idx, thresh
+        if best_idx is not None:
+            left_indices = X[:, best_idx] < best_thresh
+            right_indices = ~left_indices
+            left_child = self._build_tree(X[left_indices], y[left_indices], depth + 1)
+            right_child = self._build_tree(X[right_indices], y[right_indices], depth + 1)
+            return {"feature_idx": best_idx, "threshold": best_thresh,
+                    "left": left_child, "right": right_child}
+        return self._create_leaf(y)
+
+    def _gini_index(self, feature_column, y, threshold):
+        left_indices = feature_column < threshold
+        right_indices = ~left_indices
+        left_gini = self._gini(y[left_indices])
+        right_gini = self._gini(y[right_indices])
+        left_ratio = np.sum(left_indices) / len(y)
+        right_ratio = 1 - left_ratio
+        return left_ratio * left_gini + right_ratio * right_gini
+
+    def _gini(self, y):
+        classes = np.unique(y)
+        gini = 1.0
+        for cls in classes:
+            p = np.sum(y == cls) / len(y)
+            gini -= p ** 2
+        return gini
+
+    def _create_leaf(self, y):
+        return np.bincount(y).argmax()
+
+    def _predict_single_input(self, x, tree):
+        if isinstance(tree, dict):
+            feature_idx = tree["feature_idx"]
+            threshold = tree["threshold"]
+            if x[feature_idx] < threshold:
+                return self._predict_single_input(x, tree["left"])
+            else:
+                return self._predict_single_input(x, tree["right"])
+        else:
+            return tree
+
+
+def dt_from_scratch(data_path):
+    df = pd.read_csv(data_path)
+    X, y = df.iloc[:, 1:], df.iloc[:, 0]
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.7, random_state=42)
+    tree = DecisionTree(max_depth=50)
+    tree.fit(np.array(X_train), np.array(y_train))
+    y_pred = tree.predict(np.array(X_test))
+    print("\nDecision Tree Classifier from 'scratch':")
+    print('Confusion Matrix:\n', confusion_matrix(y_test, y_pred))
+    print('Classification Report:\n',classification_report(y_test, y_pred))
+    # print('AUC Score:', round(roc_auc_score(y_test, y_pred_proba, multi_class='ovr'), 2))
 
 
 def main():
@@ -332,11 +413,12 @@ def main():
     Question: Should we implement Convolutional Neural Network for template matching?
     Labels: t-shirt=0, pants=1, long-sleeve=2, dress=3, other-shirt=4
     """
-    data_manipulator()
-    # decision_tree_classifier('circumference_features.csv')
-    # random_forest_classifier('template_features.csv')
+    # data_manipulator()
+    # decision_tree_classifier('combined_features.csv')
+    random_forest_classifier('combined_features.csv')
     # random_forest_classifier_kfold('circumference_features.csv')
     # evaluate_classifiers('combined_features.csv')
+    # dt_from_scratch('combined_features.csv')
 
     # Use tensorflow for ffnn instead of pytorch as torch sucks (according to keli)
 
